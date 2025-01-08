@@ -1,24 +1,30 @@
-# main.py
 import os
 from dotenv import load_dotenv
 from app.bot.telegram_bot import TokenBot
+from apscheduler.schedulers.background import BlockingScheduler
 
-def main():
-    load_dotenv()
+def run_bot():
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     chat_id = os.getenv('TELEGRAM_CHAT_ID')
     
     if not token or not chat_id:
-        print("Error: Missing required environment variables")
+        print("Error: Missing env variables")
         return
         
+    bot = TokenBot(token, chat_id)
+    bot.run()
+
+def main():
+    load_dotenv()
+    scheduler = BlockingScheduler()  # Changed to BlockingScheduler
+    scheduler.add_job(run_bot, 'cron', hour='0,12')
+    
     try:
-        bot = TokenBot(token, chat_id)
-        bot.run()  # Using non-async run method
+        run_bot()  # Run immediately
+        scheduler.start()  # Start scheduler for future runs
     except KeyboardInterrupt:
+        scheduler.shutdown()
         print("\nBot stopped")
-    except Exception as e:
-        print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
