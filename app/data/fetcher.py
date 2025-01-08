@@ -144,7 +144,7 @@ async def test():
     
     try:
         print("\nFetching and validating tokens...")
-        tokens = await fetcher.get_top_tokens(
+        tokens = await fetcher.get_validated_tokens(
             min_liquidity=100000,  # $100k min liquidity
             min_volume=10000       # $10k min volume
         )
