@@ -1,80 +1,76 @@
 name: Deploy to AWS Lambda
-
 on:
   push:
     branches: [ "main", "develop" ]
   pull_request:
     branches: [ "main", "develop" ]
-
 env:
   AWS_REGION: us-east-1                    # Set your AWS region
   LAMBDA_FUNCTION_PROD: token-scanner-prod  # Production function name
   LAMBDA_FUNCTION_DEV: token-scanner-dev    # Development function name
   PYTHON_VERSION: "3.9"                     # Python version
-
+  S3_BUCKET: lambda-deployments-bucket      # Replace with your S3 bucket name
 permissions:
   contents: read
-
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    
+   
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        
+       
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pytest
         pip install -r requirements.txt
-        
+       
     - name: Run tests
       run: |
         pytest tests/
-
   deploy:
     name: Deploy
     needs: test
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-    
+   
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-
+      
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-
+        
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-
+        
     - name: Create deployment package
       run: |
         mkdir -p deployment
         cp -r app/ deployment/
         cp lambda_handler.py deployment/
-        
+       
         # Install dependencies
         pip install --target deployment/ -r requirements.txt
-        
+       
         cd deployment
         zip -r ../function.zip .
         cd ..
-
-    - name: Set environment variables
+        
+    - name: Set environment variables based on branch
+      id: set-env
       run: |
         if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
           echo "LAMBDA_FUNCTION=${{ env.LAMBDA_FUNCTION_PROD }}" >> $GITHUB_ENV
@@ -85,13 +81,25 @@ jobs:
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.DEV_TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
           echo "TELEGRAM_CHAT_ID=${{ secrets.DEV_TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
         fi
-
-    - name: Update Lambda Function
+        
+    - name: Upload package to S3
+      run: |
+        # Create a unique key name using the function name and commit SHA
+        S3_KEY="${{ env.LAMBDA_FUNCTION }}-${{ github.sha }}.zip"
+        
+        # Upload the zip file to S3
+        aws s3 cp function.zip s3://${{ env.S3_BUCKET }}/$S3_KEY
+        
+        # Store the S3 key for use in the next step
+        echo "S3_KEY=$S3_KEY" >> $GITHUB_ENV
+        
+    - name: Update Lambda Function from S3
       run: |
         aws lambda update-function-code \
           --function-name ${{ env.LAMBDA_FUNCTION }} \
-          --zip-file fileb://function.zip
-
+          --s3-bucket ${{ env.S3_BUCKET }} \
+          --s3-key ${{ env.S3_KEY }}
+          
     - name: Update Lambda Configuration
       run: |
         aws lambda update-function-configuration \
@@ -99,23 +107,25 @@ jobs:
           --timeout 300 \
           --memory-size 256 \
           --environment "Variables={TELEGRAM_BOT_TOKEN=${{ env.TELEGRAM_BOT_TOKEN }},TELEGRAM_CHAT_ID=${{ env.TELEGRAM_CHAT_ID }}}"
-
+          
+    - name: Wait for Lambda update to complete
+      run: |
+        aws lambda wait function-updated --function-name ${{ env.LAMBDA_FUNCTION }}
+       
     - name: Verify deployment
       run: |
-        # Wait for Lambda update to complete
-        aws lambda wait function-updated --function-name ${{ env.LAMBDA_FUNCTION }}
-        
-        # Test invoke the function
-        aws lambda invoke \
+        # Test invoke the function with error handling
+        output=$(aws lambda invoke \
           --function-name ${{ env.LAMBDA_FUNCTION }} \
           --payload '{"source": "github-action-test"}' \
-          response.json
+          --query 'StatusCode' \
+          response.json || echo "FAILED")
         
-        # Check the response
-        if [ $? -eq 0 ]; then
+        if [ "$output" == "200" ]; then
           echo "Lambda function invoked successfully"
           cat response.json
         else
-          echo "Lambda function invocation failed"
+          echo "Lambda function invocation failed with output: $output"
+          cat response.json || echo "No response file generated"
           exit 1
         fi
