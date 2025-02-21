@@ -116,8 +116,7 @@ jobs:
           --timeout 300 \
           --memory-size 256 \
           --environment "Variables={TELEGRAM_BOT_TOKEN=${{ env.TELEGRAM_BOT_TOKEN }},TELEGRAM_CHAT_ID=${{ env.TELEGRAM_CHAT_ID }}}" \
-          --s3-bucket ${{ env.S3_BUCKET }} \
-          --s3-key ${{ env.S3_KEY }}
+          --code S3Bucket=${{ env.S3_BUCKET }},S3Key=${{ env.S3_KEY }}
           
     - name: Update Lambda Function if it exists
       if: steps.check-function.outputs.function_exists == 'true'
