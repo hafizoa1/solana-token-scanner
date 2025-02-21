@@ -9,7 +9,7 @@ env:
   LAMBDA_FUNCTION_PROD: token-scanner-prod  # Production function name
   LAMBDA_FUNCTION_DEV: token-scanner-dev    # Development function name
   PYTHON_VERSION: "3.9"                     # Python version
-  S3_BUCKET: lambda-deployments-bucket      # Replace with your S3 bucket name
+  S3_BUCKET: solana-token-bucket      # Replace with your S3 bucket name
 permissions:
   contents: read
 jobs:
