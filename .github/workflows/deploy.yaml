@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
 env:
-  AWS_REGION: us-east-1                    # Set your AWS region
+  AWS_REGION: eu-north-1                    # Set your AWS region
   LAMBDA_FUNCTION_PROD: token-scanner-prod  # Production function name
   LAMBDA_FUNCTION_DEV: token-scanner-dev    # Development function name
   PYTHON_VERSION: "3.9"                     # Python version
