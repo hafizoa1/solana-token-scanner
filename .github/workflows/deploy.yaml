@@ -9,7 +9,8 @@ env:
   LAMBDA_FUNCTION_PROD: token-scanner-prod  # Production function name
   LAMBDA_FUNCTION_DEV: token-scanner-dev    # Development function name
   PYTHON_VERSION: "3.9"                     # Python version
-  S3_BUCKET: solana-token-bucket      # Replace with your S3 bucket name
+  S3_BUCKET: solana-token-bucket            # Your S3 bucket name
+  LAMBDA_ROLE_ARN: arn:aws:iam::4746-6839-9384:role/lambda-execution-role  # Replace ACCOUNT_ID with your AWS account ID
 permissions:
   contents: read
 jobs:
@@ -92,15 +93,42 @@ jobs:
         
         # Store the S3 key for use in the next step
         echo "S3_KEY=$S3_KEY" >> $GITHUB_ENV
+
+    - name: Check if Lambda function exists
+      id: check-function
+      run: |
+        if aws lambda get-function --function-name ${{ env.LAMBDA_FUNCTION }} &>/dev/null; then
+          echo "Function exists, will update"
+          echo "function_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Function doesn't exist, will create"
+          echo "function_exists=false" >> $GITHUB_OUTPUT
+        fi
         
-    - name: Update Lambda Function from S3
+    - name: Create Lambda function if it doesn't exist
+      if: steps.check-function.outputs.function_exists == 'false'
+      run: |
+        aws lambda create-function \
+          --function-name ${{ env.LAMBDA_FUNCTION }} \
+          --runtime python3.9 \
+          --role ${{ env.LAMBDA_ROLE_ARN }} \
+          --handler lambda_handler.lambda_handler \
+          --timeout 300 \
+          --memory-size 256 \
+          --environment "Variables={TELEGRAM_BOT_TOKEN=${{ env.TELEGRAM_BOT_TOKEN }},TELEGRAM_CHAT_ID=${{ env.TELEGRAM_CHAT_ID }}}" \
+          --s3-bucket ${{ env.S3_BUCKET }} \
+          --s3-key ${{ env.S3_KEY }}
+          
+    - name: Update Lambda Function if it exists
+      if: steps.check-function.outputs.function_exists == 'true'
       run: |
         aws lambda update-function-code \
           --function-name ${{ env.LAMBDA_FUNCTION }} \
           --s3-bucket ${{ env.S3_BUCKET }} \
           --s3-key ${{ env.S3_KEY }}
           
-    - name: Update Lambda Configuration
+    - name: Update Lambda Configuration if it exists
+      if: steps.check-function.outputs.function_exists == 'true'
       run: |
         aws lambda update-function-configuration \
           --function-name ${{ env.LAMBDA_FUNCTION }} \
