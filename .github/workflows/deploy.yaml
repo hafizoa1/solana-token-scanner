@@ -10,7 +10,7 @@ env:
   LAMBDA_FUNCTION_DEV: token-scanner-dev    # Development function name
   PYTHON_VERSION: "3.9"                     # Python version
   S3_BUCKET: solana-token-bucket            # Your S3 bucket name
-  LAMBDA_ROLE_ARN: arn:aws:iam::4746-6839-9384:role/lambda-execution-role  # Your Lambda execution role
+  LAMBDA_ROLE_ARN: arn:aws:iam::474668399384:role/lambda-execution-role  # Your Lambda execution role
 permissions:
   contents: read
 jobs:
