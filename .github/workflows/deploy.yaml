@@ -147,10 +147,11 @@ jobs:
         # Test invoke the function with error handling
         output=$(aws lambda invoke \
           --function-name ${{ env.LAMBDA_FUNCTION }} \
+          --cli-binary-format raw-in-base64-out \
           --payload '{"source": "github-action-test"}' \
           --query 'StatusCode' \
           response.json || echo "FAILED")
-        
+  
         if [ "$output" == "200" ]; then
           echo "Lambda function invoked successfully"
           cat response.json
