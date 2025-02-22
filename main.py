@@ -4,8 +4,8 @@ from app.bot.telegram_bot import TokenBot
 from apscheduler.schedulers.background import BlockingScheduler
 
 def run_bot():
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    token = os.getenv('TELEGRAM_BOT_TEST_TOKEN')
+    chat_id = os.getenv('TELEGRAM_CHAT_TEST_ID')
     
     if not token or not chat_id:
         print("Error: Missing env variables")
