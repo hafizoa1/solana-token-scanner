@@ -74,7 +74,7 @@ class TokenBot:
                     f"💰 Price: ${float(token.get('priceUsd', 0)):.4f}\n"
                     f"📈 24h Vol: ${float(token.get('volume', {}).get('h24', 0)):,.0f}\n"
                     f"💧 Liq: ${float(token.get('liquidity', {}).get('usd', 0)):,.0f}\n"
-                    f"📊 24h: {float(token.get('priceChange', {}).get('h24', 0)):+.1f}%\n"
+                    f"📊 24h: {float(token.get('priceChange', {}).get('h24', 0)):+.1f}%\n\n"
                 )
                 
                 current_batch.append(token_info)

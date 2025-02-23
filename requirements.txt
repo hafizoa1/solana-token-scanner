@@ -10,7 +10,6 @@ requests==2.31.0
 
 # API interaction
 websockets==12.0
-asyncio==3.4.3
 
 # Testing
 pytest==7.4.3
