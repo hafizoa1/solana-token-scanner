@@ -1,121 +1,67 @@
 import json
-import os
 import logging
-from app.bot.telegram_bot import TokenBot
+import traceback
 
-# Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    """
-    AWS Lambda entry point - handles Telegram webhook events
-    
-    Args:
-        event (dict): AWS Lambda event object
-        context (object): AWS Lambda context object
-    
-    Returns:
-        dict: Response with status code and body
-    """
     try:
-        # Log the entire event for debugging
-        logger.info(f"Received event: {json.dumps(event)}")
+        # Log the entire event with maximum detail
+        logger.info("Raw Event Type: %s", type(event))
+        logger.info("Raw Event Keys: %s", list(event.keys()) if event else "No keys (event is None)")
         
-        # Validate environment variables
-        token = os.environ.get('TELEGRAM_BOT_TOKEN')
-        chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-        
-        if not token or not chat_id:
-            logger.error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
-            return {
-                'statusCode': 500,
-                'body': json.dumps({
-                    'error': 'Missing required environment variables',
-                    'details': 'TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set'
-                })
-            }
-        
-        # Instantiate bot
+        # Attempt to log the full event as JSON
         try:
-            bot = TokenBot(token, chat_id)
-        except Exception as bot_init_error:
-            logger.error(f"Failed to initialize bot: {str(bot_init_error)}")
-            return {
-                'statusCode': 500,
-                'body': json.dumps({
-                    'error': 'Bot initialization failed',
-                    'details': str(bot_init_error)
-                })
-            }
+            logger.info("Full Event JSON: %s", json.dumps(event, indent=2))
+        except Exception as json_error:
+            logger.error(f"Could not convert event to JSON: {str(json_error)}")
         
-        # Safely extract and parse body
-        body = event.get('body', '{}')
-        
-        # Ensure body is a string before parsing
-        if not isinstance(body, (str, bytes, bytearray)):
-            body = json.dumps(body)
-        
-        # Parse the body
-        try:
-            parsed_body = json.loads(body)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse body: {body}")
+        # Check if event is None
+        if event is None:
             return {
                 'statusCode': 400,
                 'body': json.dumps({
-                    'error': 'Invalid JSON in request body',
-                    'received_body': str(body)
+                    'error': 'Received None event',
+                    'message': 'Event payload is empty or improperly formatted'
                 })
             }
         
-        # Extract message details
-        message = parsed_body.get('message', {})
-        message_text = message.get('text', '').strip()
+        # Defensive parsing
+        body = event.get('body', event)
         
-        logger.info(f"Received message: {message_text}")
-        
-        # Handle specific commands
-        if message_text == "/scan":
+        # If body is a string, try to parse it
+        if isinstance(body, str):
             try:
-                response = bot.scan_command(None, None)  # Process /scan command
-                logger.info("Scan command processed successfully")
-                return {
-                    'statusCode': 200,
-                    'body': json.dumps({
-                        'status': 'success',
-                        'message': 'Scan initiated',
-                        'response': response
-                    })
-                }
-            except Exception as scan_error:
-                logger.error(f"Error processing scan command: {str(scan_error)}")
-                return {
-                    'statusCode': 500,
-                    'body': json.dumps({
-                        'error': 'Failed to process scan command',
-                        'details': str(scan_error)
-                    })
-                }
+                parsed_body = json.loads(body)
+            except json.JSONDecodeError:
+                parsed_body = body
+        else:
+            parsed_body = body
         
-        # Handle other scenarios or default response
-        logger.info("Webhook received without specific action")
+        logger.info("Parsed Body Type: %s", type(parsed_body))
+        logger.info("Parsed Body: %s", parsed_body)
+        
         return {
             'statusCode': 200,
             'body': json.dumps({
-                'status': 'received',
-                'message': 'Webhook processed',
-                'command': message_text
+                'status': 'success',
+                'message': 'Event received and processed',
+                'event_type': str(type(event)),
+                'body_type': str(type(parsed_body))
             })
         }
     
     except Exception as e:
-        # Catch-all error handling
-        logger.error(f"Unexpected error in lambda_handler: {str(e)}")
+        # Comprehensive error logging
+        logger.error("Unexpected error: %s", str(e))
+        logger.error("Traceback: %s", traceback.format_exc())
+        
         return {
             'statusCode': 500,
             'body': json.dumps({
                 'error': 'Unexpected internal error',
-                'details': str(e)
+                'details': str(e),
+                'traceback': traceback.format_exc()
             })
         }
