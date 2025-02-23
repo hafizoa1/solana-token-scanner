@@ -10,28 +10,26 @@ class SimpleRuleClassifier(TokenClassifier):
             'max_price_increase_24h': 500,   # Allow for high volatility
             'required_socials': ['twitter', 'telegram']
         }
-    
+   
     def classify(self, tokens: List[Dict]) -> List[Dict]:
         """
         Classifies tokens based on a weighted scoring system.
         Returns a ranked list of tokens.
         """
         scored_tokens = []
-
         for token in tokens:
             score = self._calculate_score(token)
-            if score > 5:  # Set a minimum threshold for classification
+            if score > 8:  # Increased threshold from 5 to 8
                 token['score'] = score
                 scored_tokens.append(token)
-
         return sorted(scored_tokens, key=lambda x: x['score'], reverse=True)
 
     def _calculate_score(self, token: Dict) -> int:
         """Calculates a weighted score for each token"""
         score = 0
-        score += self._check_liquidity(token) * 3
-        score += self._check_volume(token) * 3
-        score += self._check_transactions(token) * 2
+        score += self._check_liquidity(token) * 1   # Reduced from 3 to 1
+        score += self._check_volume(token) * 3      # Keep volume weight high
+        score += self._check_transactions(token) * 3 # Increased from 2 to 3
         score += self._check_price_movement(token) * 2
         score += self._check_socials(token) * 2
         return score
@@ -60,7 +58,7 @@ class SimpleRuleClassifier(TokenClassifier):
         return 1 if any(social in existing_socials for social in self.parameters['required_socials']) else 0
 
     def get_classifier_name(self) -> str:
-        return "Advanced Weighted Classifier"
+        return "Simple Rule Classifier"
 
     def get_parameters(self) -> Dict:
         return self.parameters
