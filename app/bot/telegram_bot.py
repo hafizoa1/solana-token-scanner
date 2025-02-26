@@ -5,7 +5,7 @@ from typing import Optional
 import asyncio 
 from app.data.fetcher import DexScreenerFetcher  # Adjust the import path as necessary
 from app.classifiers.simple_rule_classifier import SimpleRuleClassifier  # Adjust the import path as necessary
-from app.classifiers.enhanced_meme__token_classifier import EnhancedMemeTokenClassifier  # Adjust the import path as necessary
+from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier  # Adjust the import path as necessary
 
 class TokenBot:
     def __init__(self, token: str, chat_id: str):
