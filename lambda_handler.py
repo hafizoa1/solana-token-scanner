@@ -5,7 +5,7 @@ import base64
 import os
 import requests
 import asyncio
-from telegram import Update
+from telegram import Bot, Update
 from app.bot.telegram_bot import TokenBot
 
 # Set up logging
@@ -50,7 +50,12 @@ def lambda_handler(event, context):
             send_telegram_message(chat_id, "🔍 Starting scan...")
             
             # Process the scan command in a separate function
-            asyncio.run(process_scan_command(telegram_update, chat_id))
+            handle_result = asyncio.run(handle_scan_directly(chat_id))
+            
+            if handle_result:
+                logger.info("Scan command processed successfully")
+            else:
+                logger.error("Scan command failed")
         
         return {'statusCode': 200, 'body': json.dumps({"status": "success"})}
         
@@ -59,24 +64,83 @@ def lambda_handler(event, context):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return {'statusCode': 500, 'body': json.dumps({"error": str(e)})}
 
-async def process_scan_command(telegram_update, chat_id):
-    """Process the scan command using the TokenBot class"""
+async def handle_scan_directly(chat_id):
+    """Handle the scan command by running the token fetch and classification directly"""
     try:
-        # Create a bot instance for this request
+        # We'll bypass the Update object entirely and just run the scanning logic directly
+        
+        # Create a token bot instance with the chat_id
         bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id)
         
-        # Create an Update object that the scan_command expects
-        update = Update.de_json(telegram_update, None)
+        # Run the scan using TokenBot's application
+        from app.data.fetcher import DexScreenerFetcher
+        from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
         
-        # Call the scan_command directly - this handles all the scanning logic
-        await bot.scan_command(update, None)
+        # Get the fetcher and classifier that would be used in the TokenBot
+        fetcher = DexScreenerFetcher()
+        classifier = SimpleRuleClassifier()
         
-        logger.info("Scan command processed successfully")
-        
+        # This mimics the scan_command logic without needing an Update object
+        try:
+            # Get tokens from fetcher
+            raw_tokens = await fetcher.get_validated_tokens()
+            
+            if not raw_tokens:
+                await bot.send_message("No tokens found.")
+                return True
+                
+            # Apply classifier
+            filtered_tokens = classifier.classify(raw_tokens)
+            
+            if not filtered_tokens:
+                await bot.send_message("No matches found.")
+                return True
+                
+            # Format and send results in batches
+            message_batches = []
+            current_batch = []
+            
+            for i, token in enumerate(filtered_tokens, 1):
+                base_token = token.get('baseToken', {})
+                token_info = (
+                    f"{i}. {base_token.get('symbol', 'Unknown')} ({base_token.get('name', 'Unknown')})\n"
+                    f"💰 Price: ${float(token.get('priceUsd', 0)):.4f}\n"
+                    f"📈 24h Vol: ${float(token.get('volume', {}).get('h24', 0)):,.0f}\n"
+                    f"💧 Liq: ${float(token.get('liquidity', {}).get('usd', 0)):,.0f}\n"
+                    f"📊 24h: {float(token.get('priceChange', {}).get('h24', 0)):+.1f}%\n\n"
+                )
+                
+                current_batch.append(token_info)
+                
+                if len(current_batch) == 10:
+                    batch_message = ''.join(current_batch)
+                    message_batches.append(batch_message)
+                    current_batch = []
+                    
+            if current_batch:
+                batch_message = ''.join(current_batch)
+                message_batches.append(batch_message)
+                
+            # Send each batch
+            for batch in message_batches:
+                await bot.send_message(batch)
+                await asyncio.sleep(0.5)
+                
+            # Send completion message
+            await bot.send_message(f"✅ Found {len(filtered_tokens)} tokens.")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in scan operation: {e}")
+            await bot.send_message(f"❌ Error: {str(e)}")
+            return False
+            
     except Exception as e:
-        logger.error(f"Error processing scan command: {str(e)}")
+        logger.error(f"Error handling scan: {str(e)}")
         logger.error(traceback.format_exc())
         send_telegram_message(chat_id, f"❌ Error: {str(e)}")
+        return False
 
 def send_telegram_message(chat_id, text):
     """Send a simple message via Telegram API directly"""
