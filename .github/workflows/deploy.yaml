@@ -31,24 +31,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install -r requirements.txt
-
-    - name: Debug file structure
-      run: |
-        echo "Checking file structure:"
-        ls -la app/
-        ls -la app/classifiers/
-        echo "Checking if enhanced_meme_token_classifier.py exists:"
-        if [ -f app/classifiers/enhanced_meme_token_classifier.py ]; then
-          echo "File exists! First 10 lines:"
-          head -n 10 app/classifiers/enhanced_meme_token_classifier.py
-        else
-          echo "File does not exist!"
-          echo "Looking for similar files:"
-          find app/classifiers/ -name "*.py" | grep -i "enhanced"
-        fi
-        echo "Checking __init__.py files:"
-        if [ -f app/__init__.py ]; then echo "app/__init__.py exists"; else echo "app/__init__.py missing"; fi
-        if [ -f app/classifiers/__init__.py ]; then echo "app/classifiers/__init__.py exists"; else echo "app/classifiers/__init__.py missing"; fi
        
     - name: Run tests
       run: |

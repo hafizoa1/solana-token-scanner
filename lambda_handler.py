@@ -73,7 +73,6 @@ def run_scan(chat_id):
     try:
         # Create a dummy Update and Context for scan_command
         from telegram import Update
-        from telegram.ext import CallbackContext
         
         # Initialize the bot
         bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id)
@@ -87,11 +86,16 @@ def run_scan(chat_id):
                     'date': 0,
                     'chat': {
                         'id': chat_id,
-                        'type': 'private'
+                        'type': 'private',
+                        'first_name': 'User',  # Add firstname
+                        'username': 'user'
                     },
                     'text': '/scan',
                     'from': {
-                        'id': chat_id
+                        'id': chat_id,
+                        'is_bot': False,  # Add isbot parameter
+                        'first_name': 'User',
+                        'username': 'user'
                     }
                 }
             },
