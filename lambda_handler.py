@@ -1,9 +1,15 @@
 import json
 import logging
 import traceback
+import os
+import requests
 
+# Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Get Telegram bot token from environment variables
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 def lambda_handler(event, context):
     try:
@@ -42,6 +48,10 @@ def lambda_handler(event, context):
         logger.info("Parsed Body Type: %s", type(parsed_body))
         logger.info("Parsed Body: %s", parsed_body)
         
+        # Handle Telegram message
+        if isinstance(parsed_body, dict) and 'message' in parsed_body:
+            process_telegram_message(parsed_body)
+        
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -65,3 +75,46 @@ def lambda_handler(event, context):
                 'traceback': traceback.format_exc()
             })
         }
+
+def process_telegram_message(update):
+    """Process incoming Telegram message"""
+    # Extract message data
+    message = update.get('message', {})
+    chat_id = message.get('chat', {}).get('id')
+    text = message.get('text', '')
+    
+    logger.info(f"Processing message: '{text}' from chat_id: {chat_id}")
+    
+    # Check if this is a /scan command
+    if text and text.startswith('/scan'):
+        # Extract any parameters after the /scan command
+        params = text.replace('/scan', '').strip()
+        
+        # Here is where you would call your scan function
+        # For now, we'll just return a placeholder response
+        response_text = f"Scanning token: {params}" if params else "Please provide a token address to scan"
+        
+        # Send response back to user
+        send_telegram_reply(chat_id, response_text)
+    else:
+        logger.info("Message is not a scan command, ignoring")
+
+def send_telegram_reply(chat_id, text):
+    """Send a reply back to the Telegram user"""
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("TELEGRAM_BOT_TOKEN environment variable not set")
+        return
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': text
+    }
+    
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        logger.info(f"Message sent successfully: {response.json()}")
+    except Exception as e:
+        logger.error(f"Failed to send message: {str(e)}")
+        logger.error(traceback.format_exc())
