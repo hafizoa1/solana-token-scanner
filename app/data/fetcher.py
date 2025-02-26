@@ -139,24 +139,49 @@ async def test():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+   
     fetcher = DexScreenerFetcher()
-    
+   
     try:
         print("\nFetching and validating tokens...")
         tokens = await fetcher.get_validated_tokens(
             min_liquidity=100000,  # $100k min liquidity
             min_volume=10000       # $10k min volume
         )
-        
+       
         print(f"\nFound {len(tokens)} validated tokens")
-        
-        # Print detailed info for first token to show data structure
+       
+        # Print detailed info for first validated token
         if tokens:
-            print("\nSample Token Data Structure:")
+            print("\nSample Validated Token Data Structure:")
             import json
             print(json.dumps(tokens[0], indent=2))
         
+        # Get Jupiter trending tokens
+        print("\nFetching Jupiter trending tokens...")
+        jupiter_trending = await fetcher.get_jupiter_trending()
+        print(f"Found {len(jupiter_trending)} Jupiter trending tokens")
+        
+        # Print detailed info for first Jupiter trending token
+        if jupiter_trending:
+            print("\nJupiter Trending Token Data Structure (First Token):")
+            print(json.dumps(jupiter_trending[0], indent=2))
+            
+            # Print all field names and types from Jupiter trending token
+            sample_token = jupiter_trending[0]
+            print("\nJupiter Trending Token Fields:")
+            for key, value in sample_token.items():
+                if isinstance(value, dict):
+                    print(f"- {key} (object):")
+                    for sub_key, sub_value in value.items():
+                        print(f"  - {sub_key}: {type(sub_value).__name__}")
+                elif isinstance(value, list):
+                    print(f"- {key} (array of {len(value)} items)")
+                    if value and len(value) > 0:
+                        print(f"  - First item type: {type(value[0]).__name__}")
+                else:
+                    print(f"- {key}: {type(value).__name__}")
+       
     except Exception as e:
         print(f"Error during validation: {str(e)}")
     finally:
