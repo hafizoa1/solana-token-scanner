@@ -56,6 +56,17 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Debug file structure
+      run: |
+        echo "Checking file structure:"
+        ls -la app/classifiers/
+        echo "Checking file content if exists:"
+        if [ -f app/classifiers/enhanced_meme_token_classifier.py ]; then
+          cat app/classifiers/enhanced_meme_token_classifier.py | head -n 10
+        else
+          echo "File does not exist!"
+        fi
         
     - name: Create deployment package
       run: |
