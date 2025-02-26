@@ -5,7 +5,8 @@ import base64
 import os
 import requests
 import asyncio
-from telegram import Bot, Update
+from app.data.fetcher import DexScreenerFetcher
+from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
 from app.bot.telegram_bot import TokenBot
 
 # Set up logging
@@ -14,11 +15,34 @@ logger.setLevel(logging.INFO)
 
 # Get environment variables
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')  # For scheduled events
 
 def lambda_handler(event, context):
     try:
-        logger.info("Lambda function invoked")
+        logger.info(f"Lambda function invoked")
         
+        # Check if this is a scheduled event from CloudWatch
+        is_scheduled_event = 'source' in event and (
+            event['source'] == 'aws.events' or 
+            'detail-type' in event and event['detail-type'] == 'Scheduled Event'
+        )
+        
+        if is_scheduled_event:
+            logger.info("Processing scheduled event")
+            
+            if not TELEGRAM_CHAT_ID:
+                logger.error("TELEGRAM_CHAT_ID environment variable not set for scheduled events")
+                return {'statusCode': 500, 'body': json.dumps({"error": "TELEGRAM_CHAT_ID not set"})}
+            
+            # Send initial message
+            send_telegram_message(TELEGRAM_CHAT_ID, "🕒 Running scheduled token scan...")
+            
+            # Run the scan with the default chat ID
+            asyncio.run(handle_scan_directly(TELEGRAM_CHAT_ID))
+            
+            return {'statusCode': 200, 'body': json.dumps({"message": "Scheduled scan completed"})}
+        
+        # If not a scheduled event, process as a webhook from Telegram
         # Extract and decode the body if it's base64 encoded
         body = event.get('body')
         is_base64 = event.get('isBase64Encoded', False)
@@ -49,13 +73,8 @@ def lambda_handler(event, context):
             # Send a simple response to acknowledge receipt
             send_telegram_message(chat_id, "🔍 Starting scan...")
             
-            # Process the scan command in a separate function
-            handle_result = asyncio.run(handle_scan_directly(chat_id))
-            
-            if handle_result:
-                logger.info("Scan command processed successfully")
-            else:
-                logger.error("Scan command failed")
+            # Process the scan command
+            asyncio.run(handle_scan_directly(chat_id))
         
         return {'statusCode': 200, 'body': json.dumps({"status": "success"})}
         
@@ -65,22 +84,15 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': json.dumps({"error": str(e)})}
 
 async def handle_scan_directly(chat_id):
-    """Handle the scan command by running the token fetch and classification directly"""
+    """Handle the scan by running the token fetch and classification directly"""
     try:
-        # We'll bypass the Update object entirely and just run the scanning logic directly
-        
         # Create a token bot instance with the chat_id
         bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id)
         
-        # Run the scan using TokenBot's application
-        from app.data.fetcher import DexScreenerFetcher
-        from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
-        
-        # Get the fetcher and classifier that would be used in the TokenBot
+        # Get the fetcher and classifier
         fetcher = DexScreenerFetcher()
         classifier = SimpleRuleClassifier()
         
-        # This mimics the scan_command logic without needing an Update object
         try:
             # Get tokens from fetcher
             raw_tokens = await fetcher.get_validated_tokens()
