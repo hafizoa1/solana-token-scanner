@@ -8,7 +8,6 @@ import asyncio
 from app.bot.telegram_bot import TokenBot
 from app.data.fetcher import DexScreenerFetcher
 from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
-from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
 from app.services.token_service import TokenService
 import app.config as config
 
@@ -78,11 +77,8 @@ def create_service():
     # Create dependencies
     fetcher = DexScreenerFetcher()
     
-    # Choose classifier based on config
-    if config.DEFAULT_CLASSIFIER.lower() == "simple":
-        classifier = SimpleRuleClassifier()
-    else:
-        classifier = EnhancedMemeTokenClassifier()
+    # Create classifier
+    classifier = EnhancedMemeTokenClassifier()
     
     # Create service with dependencies
     return TokenService(fetcher, classifier)
