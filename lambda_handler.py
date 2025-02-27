@@ -78,7 +78,6 @@ def lambda_handler(event, context):
         
         if text and text.startswith('/scan'):
             logger.info("Detected /scan command")
-            send_telegram_message(chat_id, "🔍 Starting scan...")
             run_scan_with_bot(bot, chat_id)
         
         return {'statusCode': 200, 'body': json.dumps({"status": "success"})}
