@@ -83,14 +83,11 @@ def run_scan(chat_id):
     try:
         # Create a dummy Update and Context for scan_command
         from telegram import Update
+        from telegram.ext import CallbackContext
         
-        # Create service components
-        fetcher = DexScreenerFetcher()
-        classifier = EnhancedMemeTokenClassifier()
-        token_service = TokenService(fetcher, classifier)
-        
-        # Initialize the bot with the service
-        bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id, token_service)
+        # Initialize the bot
+        from app.bot.telegram_bot import TokenBot
+        bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id)
         
         # Create a minimal Update object
         update = Update.de_json(
@@ -117,20 +114,15 @@ def run_scan(chat_id):
             bot.application.bot
         )
         
-        # Run the scan_command with the dummy Update object
-        asyncio.run(bot.scan_command(update, None))
+        # Run the scan_command synchronously
+        bot.scan_command_sync(update, None)
         logger.info("Scan completed successfully")
-        
-        # Clean up resources
-        logger.info("Shutting down token service...")
-        asyncio.run(token_service.shutdown())
-        logger.info("Token service shut down successfully")
-        
+    
     except Exception as e:
         logger.error(f"Error in scan operation: {e}")
         logger.error(traceback.format_exc())
         send_telegram_message(chat_id, f"❌ Error: {str(e)}")
-
+        
 def send_telegram_message(chat_id, text):
     """Sends a message via Telegram API."""
     if not TELEGRAM_BOT_TOKEN:

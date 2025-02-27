@@ -26,6 +26,20 @@ class TokenBot:
         """Non-async method to start the bot"""
         self.logger.info("Starting bot...")
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    def scan_command_sync(self, update: Update, context: Optional[ContextTypes.DEFAULT_TYPE] = None):
+        """Synchronous wrapper for scan_command"""
+        import asyncio
+        
+        async def run_scan():
+            await self.scan_command(update, context)
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_scan())
+        finally:
+            loop.close()
         
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handler for /start command"""
