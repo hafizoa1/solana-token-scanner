@@ -11,6 +11,7 @@ env:
   PYTHON_VERSION: "3.9"                     # Python version
   S3_BUCKET: solana-token-bucket            # Your S3 bucket name
   LAMBDA_ROLE_ARN: arn:aws:iam::474668399384:role/lambda-execution-role  # Your Lambda execution role
+  API_NAME: TelegramBotApi                  # API Gateway name (match your existing API)
 permissions:
   contents: read
 jobs:
@@ -78,10 +79,12 @@ jobs:
           echo "LAMBDA_FUNCTION=${{ env.LAMBDA_FUNCTION_PROD }}" >> $GITHUB_ENV
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.PROD_TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
           echo "TELEGRAM_CHAT_ID=${{ secrets.PROD_TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
+          echo "API_STAGE=prod" >> $GITHUB_ENV
         else
           echo "LAMBDA_FUNCTION=${{ env.LAMBDA_FUNCTION_DEV }}" >> $GITHUB_ENV
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.DEV_TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
           echo "TELEGRAM_CHAT_ID=${{ secrets.DEV_TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
+          echo "API_STAGE=dev" >> $GITHUB_ENV
         fi
         
     - name: Upload package to S3
@@ -142,6 +145,98 @@ jobs:
     - name: Wait for Lambda update to complete
       run: |
         aws lambda wait function-updated --function-name ${{ env.LAMBDA_FUNCTION }}
+
+    - name: Set up API Gateway
+      run: |
+        # Check if API exists
+        API_ID=$(aws apigateway get-rest-apis --query "items[?name=='${{ env.API_NAME }}'].id" --output text)
+        
+        if [ -z "$API_ID" ]; then
+          echo "Creating new API Gateway"
+          API_ID=$(aws apigateway create-rest-api --name ${{ env.API_NAME }} --query "id" --output text)
+          
+          # Get the root resource ID
+          ROOT_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query "items[?path=='/'].id" --output text)
+          
+          # Create a resource
+          RESOURCE_ID=$(aws apigateway create-resource --rest-api-id $API_ID --parent-id $ROOT_ID --path-part webhook --query "id" --output text)
+          
+          # Create a POST method
+          aws apigateway put-method --rest-api-id $API_ID --resource-id $RESOURCE_ID --http-method POST --authorization-type NONE
+          
+          # Set up Lambda integration
+          aws apigateway put-integration \
+            --rest-api-id $API_ID \
+            --resource-id $RESOURCE_ID \
+            --http-method POST \
+            --type AWS_PROXY \
+            --integration-http-method POST \
+            --uri arn:aws:apigateway:${{ env.AWS_REGION }}:lambda:path/2015-03-31/functions/arn:aws:lambda:${{ env.AWS_REGION }}:$(aws sts get-caller-identity --query Account --output text):function:${{ env.LAMBDA_FUNCTION }}/invocations
+        else
+          echo "API Gateway exists with ID: $API_ID"
+          
+          # Get resources to check if webhook exists
+          RESOURCES=$(aws apigateway get-resources --rest-api-id $API_ID)
+          ROOT_ID=$(echo $RESOURCES | jq -r '.items[] | select(.path=="/") | .id')
+          WEBHOOK_RESOURCE=$(echo $RESOURCES | jq -r '.items[] | select(.path=="/webhook") | .id')
+          
+          # Create webhook resource if it doesn't exist
+          if [ -z "$WEBHOOK_RESOURCE" ] || [ "$WEBHOOK_RESOURCE" == "null" ]; then
+            echo "Creating webhook resource"
+            RESOURCE_ID=$(aws apigateway create-resource --rest-api-id $API_ID --parent-id $ROOT_ID --path-part webhook --query "id" --output text)
+            
+            # Create POST method
+            aws apigateway put-method --rest-api-id $API_ID --resource-id $RESOURCE_ID --http-method POST --authorization-type NONE
+            
+            # Set up Lambda integration
+            aws apigateway put-integration \
+              --rest-api-id $API_ID \
+              --resource-id $RESOURCE_ID \
+              --http-method POST \
+              --type AWS_PROXY \
+              --integration-http-method POST \
+              --uri arn:aws:apigateway:${{ env.AWS_REGION }}:lambda:path/2015-03-31/functions/arn:aws:lambda:${{ env.AWS_REGION }}:$(aws sts get-caller-identity --query Account --output text):function:${{ env.LAMBDA_FUNCTION }}/invocations
+          else
+            echo "Webhook resource exists, updating integration"
+            
+            # Update Lambda integration
+            aws apigateway put-integration \
+              --rest-api-id $API_ID \
+              --resource-id $WEBHOOK_RESOURCE \
+              --http-method POST \
+              --type AWS_PROXY \
+              --integration-http-method POST \
+              --uri arn:aws:apigateway:${{ env.AWS_REGION }}:lambda:path/2015-03-31/functions/arn:aws:lambda:${{ env.AWS_REGION }}:$(aws sts get-caller-identity --query Account --output text):function:${{ env.LAMBDA_FUNCTION }}/invocations
+          fi
+        fi
+        
+        # Deploy the API
+        DEPLOYMENT_ID=$(aws apigateway create-deployment \
+          --rest-api-id $API_ID \
+          --stage-name ${{ env.API_STAGE }} \
+          --description "Deployed by GitHub Actions" \
+          --query "id" \
+          --output text)
+        
+        echo "API Gateway deployed with ID: $DEPLOYMENT_ID"
+        
+        # Grant API Gateway permission to invoke Lambda
+        aws lambda add-permission \
+          --function-name ${{ env.LAMBDA_FUNCTION }} \
+          --statement-id apigateway-${{ env.API_STAGE }} \
+          --action lambda:InvokeFunction \
+          --principal apigateway.amazonaws.com \
+          --source-arn "arn:aws:execute-api:${{ env.AWS_REGION }}:$(aws sts get-caller-identity --query Account --output text):$API_ID/*/*/*" \
+          || echo "Permission may already exist"
+        
+        # Get the Invoke URL
+        INVOKE_URL="https://$API_ID.execute-api.${{ env.AWS_REGION }}.amazonaws.com/${{ env.API_STAGE }}/webhook"
+        echo "API Gateway Invoke URL: $INVOKE_URL"
+        
+        # Register webhook with Telegram
+        echo "Updating Telegram webhook to URL: $INVOKE_URL"
+        WEBHOOK_RESPONSE=$(curl -s "https://api.telegram.org/bot${{ env.TELEGRAM_BOT_TOKEN }}/setWebhook?url=$INVOKE_URL")
+        echo "Webhook update response: $WEBHOOK_RESPONSE"
        
     - name: Verify deployment
       run: |
