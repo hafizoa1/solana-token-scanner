@@ -8,7 +8,9 @@ import asyncio
 from app.bot.telegram_bot import TokenBot
 from app.data.fetcher import DexScreenerFetcher
 from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
+from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
 from app.services.token_service import TokenService
+import app.config as config
 
 # Set up logging
 logger = logging.getLogger()
@@ -30,6 +32,25 @@ def lambda_handler(event, context):
             logger.info("Processing GitHub deployment test")
             return {'statusCode': 200, 'body': json.dumps({"message": "Deployment test successful"})}
         
+        # Initialize dependencies - these need to be created for each lambda invocation
+        fetcher = DexScreenerFetcher()
+        
+        # Choose classifier based on config
+        if hasattr(config, 'DEFAULT_CLASSIFIER') and config.DEFAULT_CLASSIFIER.lower() == "simple":
+            classifier = SimpleRuleClassifier()
+        else:
+            classifier = EnhancedMemeTokenClassifier()
+        
+        # Create service with dependencies
+        token_service = TokenService(fetcher, classifier)
+        
+        # Create bot with service
+        bot = TokenBot(
+            token=TELEGRAM_BOT_TOKEN,
+            chat_id=TELEGRAM_CHAT_ID, 
+            token_service=token_service
+        )
+        
         # Check if this is a scheduled CloudWatch event
         if is_scheduled_event(event):
             logger.info("Processing scheduled event")
@@ -38,7 +59,7 @@ def lambda_handler(event, context):
                 return {'statusCode': 500, 'body': json.dumps({"error": "TELEGRAM_CHAT_ID not set"})}
                 
             send_telegram_message(TELEGRAM_CHAT_ID, "🕒 Running scheduled token scan...")
-            run_scan(TELEGRAM_CHAT_ID)
+            run_scan_with_bot(bot, TELEGRAM_CHAT_ID)
             return {'statusCode': 200, 'body': json.dumps({"message": "Scheduled scan completed"})}
         
         # Otherwise, handle Telegram webhook events
@@ -58,7 +79,7 @@ def lambda_handler(event, context):
         if text and text.startswith('/scan'):
             logger.info("Detected /scan command")
             send_telegram_message(chat_id, "🔍 Starting scan...")
-            run_scan(chat_id)
+            run_scan_with_bot(bot, chat_id)
         
         return {'statusCode': 200, 'body': json.dumps({"status": "success"})}
     
@@ -78,18 +99,12 @@ def extract_request_body(event):
         return base64.b64decode(body).decode('utf-8')
     return body
 
-def run_scan(chat_id):
-    """Runs the token scan and sends results to the specified chat."""
+def run_scan_with_bot(bot, chat_id):
+    """Runs the token scan using an already initialized bot instance."""
     try:
-        # Create a dummy Update and Context for scan_command
-        from telegram import Update
-        from telegram.ext import CallbackContext
-        
-        # Initialize the bot
-        from app.bot.telegram_bot import TokenBot
-        bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id)
-        
         # Create a minimal Update object
+        from telegram import Update
+        
         update = Update.de_json(
             {
                 'update_id': 0,
