@@ -5,10 +5,6 @@ import traceback
 import base64
 import requests
 import asyncio
-from app.bot.telegram_bot import TokenBot
-from app.data.fetcher import DexScreenerFetcher
-from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
-from app.services.token_service import TokenService
 
 # Set up logging
 logger = logging.getLogger()
@@ -74,15 +70,19 @@ def extract_request_body(event):
 def run_scan(chat_id):
     """Runs the token scan and sends results to the specified chat."""
     try:
-        # Create a dummy Update and Context for scan_command
+        # Import dependencies here to avoid potential initialization issues
         from telegram import Update
+        from app.bot.telegram_bot import TokenBot
+        from app.data.fetcher import DexScreenerFetcher
+        from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
+        from app.services.token_service import TokenService
         
-        # Create service components
+        # Create components
         fetcher = DexScreenerFetcher()
         classifier = EnhancedMemeTokenClassifier()
         token_service = TokenService(fetcher, classifier)
         
-        # Initialize the bot with the token service
+        # Create bot
         bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id, token_service)
         
         # Create a minimal Update object
