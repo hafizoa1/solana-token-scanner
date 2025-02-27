@@ -9,15 +9,14 @@ from app.bot.telegram_bot import TokenBot
 from app.data.fetcher import DexScreenerFetcher
 from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
 from app.services.token_service import TokenService
-import app.config as config
 
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Get environment variables
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', config.BOT_TOKEN_PROD)
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', config.CHAT_ID_PROD)
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
 def lambda_handler(event, context):
     """
@@ -72,27 +71,18 @@ def extract_request_body(event):
         return base64.b64decode(body).decode('utf-8')
     return body
 
-def create_service():
-    """Creates and initializes the token service with dependencies."""
-    # Create dependencies
-    fetcher = DexScreenerFetcher()
-    
-    # Create classifier
-    classifier = EnhancedMemeTokenClassifier()
-    
-    # Create service with dependencies
-    return TokenService(fetcher, classifier)
-
 def run_scan(chat_id):
     """Runs the token scan and sends results to the specified chat."""
     try:
         # Create a dummy Update and Context for scan_command
         from telegram import Update
         
-        # Initialize service
-        token_service = create_service()
+        # Create service components
+        fetcher = DexScreenerFetcher()
+        classifier = EnhancedMemeTokenClassifier()
+        token_service = TokenService(fetcher, classifier)
         
-        # Initialize the bot with token service
+        # Initialize the bot with the token service
         bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id, token_service)
         
         # Create a minimal Update object
