@@ -4,17 +4,18 @@ from decimal import Decimal
 import logging
 import asyncio
 from time import time
+import app.config as config
 
 class DexScreenerFetcher:
     def __init__(self):
-        self.dex_base_url = "https://api.dexscreener.com/latest/dex"
-        self.jupiter_base_url = "https://tokens.jup.ag"
+        self.dex_base_url = config.DEXSCREENER_BASE_URL
+        self.jupiter_base_url = config.JUPITER_BASE_URL
         self.session = None
         self.logger = logging.getLogger('DexScreener')
         self.last_request_time = 0
-        self.BATCH_SIZE = 30
-        self.RATE_LIMIT_REQUESTS = 300
-        self.RATE_LIMIT_WINDOW = 60
+        self.BATCH_SIZE = config.BATCH_SIZE
+        self.RATE_LIMIT_REQUESTS = config.RATE_LIMIT_REQUESTS
+        self.RATE_LIMIT_WINDOW = config.RATE_LIMIT_WINDOW
    
     async def init_session(self):
         if not self.session:
@@ -91,6 +92,7 @@ class DexScreenerFetcher:
 
     async def get_validated_tokens(self, min_liquidity: float = 10000, min_volume: float = 1000) -> List[Dict]:
         """Get validated tokens from Jupiter and DexScreener"""
+        await self.init_session()
         # Get trending tokens from Jupiter
         jupiter_tokens = await self.get_jupiter_trending()
         validated_tokens = []
@@ -133,59 +135,3 @@ class DexScreenerFetcher:
             return liquidity >= min_liquidity and volume >= min_volume
         except (TypeError, ValueError):
             return False
-
-async def test():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-   
-    fetcher = DexScreenerFetcher()
-   
-    try:
-        print("\nFetching and validating tokens...")
-        tokens = await fetcher.get_validated_tokens(
-            min_liquidity=100000,  # $100k min liquidity
-            min_volume=10000       # $10k min volume
-        )
-       
-        print(f"\nFound {len(tokens)} validated tokens")
-       
-        # Print detailed info for first validated token
-        if tokens:
-            print("\nSample Validated Token Data Structure:")
-            import json
-            print(json.dumps(tokens[0], indent=2))
-        
-        # Get Jupiter trending tokens
-        print("\nFetching Jupiter trending tokens...")
-        jupiter_trending = await fetcher.get_jupiter_trending()
-        print(f"Found {len(jupiter_trending)} Jupiter trending tokens")
-        
-        # Print detailed info for first Jupiter trending token
-        if jupiter_trending:
-            print("\nJupiter Trending Token Data Structure (First Token):")
-            print(json.dumps(jupiter_trending[0], indent=2))
-            
-            # Print all field names and types from Jupiter trending token
-            sample_token = jupiter_trending[0]
-            print("\nJupiter Trending Token Fields:")
-            for key, value in sample_token.items():
-                if isinstance(value, dict):
-                    print(f"- {key} (object):")
-                    for sub_key, sub_value in value.items():
-                        print(f"  - {sub_key}: {type(sub_value).__name__}")
-                elif isinstance(value, list):
-                    print(f"- {key} (array of {len(value)} items)")
-                    if value and len(value) > 0:
-                        print(f"  - First item type: {type(value[0]).__name__}")
-                else:
-                    print(f"- {key}: {type(value).__name__}")
-       
-    except Exception as e:
-        print(f"Error during validation: {str(e)}")
-    finally:
-        await fetcher.close()
-
-if __name__ == "__main__":
-    asyncio.run(test())

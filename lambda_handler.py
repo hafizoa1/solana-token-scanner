@@ -6,21 +6,26 @@ import base64
 import requests
 import asyncio
 from app.bot.telegram_bot import TokenBot
+from app.data.fetcher import DexScreenerFetcher
+from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
+from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
+from app.services.token_service import TokenService
+import app.config as config
 
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Get environment variables
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', config.BOT_TOKEN_PROD)
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', config.CHAT_ID_PROD)
 
 def lambda_handler(event, context):
     """
     AWS Lambda handler that processes both scheduled CloudWatch events and Telegram webhook events.
     """
     try:
-        logger.info(f"Lambda function invoked")
+        logger.info("Lambda function invoked")
         
         # Check if this is a scheduled CloudWatch event
         if is_scheduled_event(event):
@@ -68,14 +73,31 @@ def extract_request_body(event):
         return base64.b64decode(body).decode('utf-8')
     return body
 
+def create_service():
+    """Creates and initializes the token service with dependencies."""
+    # Create dependencies
+    fetcher = DexScreenerFetcher()
+    
+    # Choose classifier based on config
+    if config.DEFAULT_CLASSIFIER.lower() == "simple":
+        classifier = SimpleRuleClassifier()
+    else:
+        classifier = EnhancedMemeTokenClassifier()
+    
+    # Create service with dependencies
+    return TokenService(fetcher, classifier)
+
 def run_scan(chat_id):
     """Runs the token scan and sends results to the specified chat."""
     try:
         # Create a dummy Update and Context for scan_command
         from telegram import Update
         
-        # Initialize the bot
-        bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id)
+        # Initialize service
+        token_service = create_service()
+        
+        # Initialize the bot with token service
+        bot = TokenBot(TELEGRAM_BOT_TOKEN, chat_id, token_service)
         
         # Create a minimal Update object
         update = Update.de_json(
@@ -87,13 +109,13 @@ def run_scan(chat_id):
                     'chat': {
                         'id': chat_id,
                         'type': 'private',
-                        'first_name': 'User',  # Add firstname
+                        'first_name': 'User',
                         'username': 'user'
                     },
                     'text': '/scan',
                     'from': {
                         'id': chat_id,
-                        'is_bot': False,  # Add isbot parameter
+                        'is_bot': False,
                         'first_name': 'User',
                         'username': 'user'
                     }
@@ -105,6 +127,9 @@ def run_scan(chat_id):
         # Run the scan_command with the dummy Update object
         asyncio.run(bot.scan_command(update, None))
         logger.info("Scan completed successfully")
+        
+        # Clean up resources
+        asyncio.run(token_service.shutdown())
         
     except Exception as e:
         logger.error(f"Error in scan operation: {e}")

@@ -1,30 +1,49 @@
-import os
-from dotenv import load_dotenv
+"""
+Main entry point for the application.
+"""
+import asyncio
+import logging
 from app.bot.telegram_bot import TokenBot
-from apscheduler.schedulers.background import BlockingScheduler
-
-def run_bot():
-    token = os.getenv('TELEGRAM_BOT_TEST_TOKEN')
-    chat_id = os.getenv('TELEGRAM_CHAT_TEST_ID')
-    
-    if not token or not chat_id:
-        print("Error: Missing env variables")
-        return
-        
-    bot = TokenBot(token, chat_id)
-    bot.run()
+from app.data.fetcher import DexScreenerFetcher
+from app.classifiers.enhanced_meme_token_classifier import EnhancedMemeTokenClassifier
+from app.classifiers.simple_rule_classifier import SimpleRuleClassifier
+from app.services.token_service import TokenService
+import app.config as config
 
 def main():
-    load_dotenv()
-    scheduler = BlockingScheduler()  # Changed to BlockingScheduler
-    scheduler.add_job(run_bot, 'cron', hour='0,12')
+    # Set up logging
+    config.setup_logging()
+    logger = logging.getLogger('Main')
     
     try:
-        run_bot()  # Run immediately
-        scheduler.start()  # Start scheduler for future runs
-    except KeyboardInterrupt:
-        scheduler.shutdown()
-        print("\nBot stopped")
+        logger.info("Initializing application...")
+        
+        # Create dependencies
+        fetcher = DexScreenerFetcher()
+        
+        # Choose classifier based on config
+        if config.DEFAULT_CLASSIFIER.lower() == "simple":
+            classifier = SimpleRuleClassifier()
+        else:
+            classifier = EnhancedMemeTokenClassifier()
+        
+        # Create service with dependencies
+        token_service = TokenService(fetcher, classifier)
+        
+        # Create bot with service
+        bot = TokenBot(
+            token=config.BOT_TOKEN,
+            chat_id=config.CHAT_ID,
+            token_service=token_service
+        )
+        
+        logger.info(f"Starting bot with classifier: {classifier.__class__.__name__}")
+        bot.run()
+        
+    except Exception as e:
+        logger.error(f"Fatal error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
