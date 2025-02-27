@@ -29,16 +29,25 @@ class TokenBot:
 
     def scan_command_sync(self, update: Update, context: Optional[ContextTypes.DEFAULT_TYPE] = None):
         """Synchronous wrapper for scan_command"""
-        import asyncio
-        
         async def run_scan():
+            # Explicitly pass the update and context
             await self.scan_command(update, context)
         
+        # Create a new event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        
         try:
+            # Run the async method
+            self.logger.info("Starting synchronous scan wrapper")
             loop.run_until_complete(run_scan())
+            self.logger.info("Synchronous scan completed successfully")
+        except Exception as e:
+            self.logger.error(f"Error in synchronous scan wrapper: {e}")
+            # You might want to send an error message to the user here
+            raise
         finally:
+            # Close the event loop
             loop.close()
         
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
