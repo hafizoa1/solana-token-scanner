@@ -1,3 +1,4 @@
+```mermaid
 graph TD
     %% Entry Points
     User[👤 Telegram User] -->|Sends "/scan"| API_Gateway
