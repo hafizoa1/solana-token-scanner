@@ -1,7 +1,7 @@
 ```mermaid
 graph TD
     %% Entry Points
-    User[👤 Telegram User] -->|Sends "scan"| API_Gateway
+    User[👤 Telegram User] -->|Sends scan| API_Gateway
     CronJob[⏳ AWS EventBridge] --> API_Gateway
 
     %% API Gateway to Lambda
