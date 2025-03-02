@@ -1,3 +1,4 @@
+```mermaid
 graph TD
     %% Entry Points
     User[👤 Telegram User] -->|Sends "/scan"| API_Gateway
@@ -29,3 +30,4 @@ graph TD
 
     %% Monitoring
     Lambda_Function -->|Log Events| CloudWatch[📋 CloudWatch]
+```
